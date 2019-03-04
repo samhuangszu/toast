@@ -11,69 +11,49 @@ import (
 
 type Key interface {
 	PublicKey() *rsa.PublicKey
-	PrivateKey() *rsa.PrivateKey
 	Modulus() int
 }
 
-func ParsePKCS8Key(publicKey, privateKey []byte) (Key, error) {
-	puk, err := x509.ParsePKIXPublicKey(publicKey)
+func ParsePKCS8Key(publicKey []byte) (Key, error) {
+	puk, _ := pem.Decode(publicKey)
+	if puk == nil {
+		return nil, errors.New("publicKey is not pem formate")
+	}
+	pub, err := x509.ParsePKIXPublicKey(puk.Bytes)
 	if err != nil {
 		return nil, err
 	}
-
-	prk, err := x509.ParsePKCS8PrivateKey(privateKey)
-	if err != nil {
-		return nil, err
-	}
-	return &key{publicKey: puk.(*rsa.PublicKey), privateKey: prk.(*rsa.PrivateKey)}, nil
+	return &key{publicKey: pub.(*rsa.PublicKey)}, nil
 }
 
-func ParsePKCS1Key(publicKey, privateKey []byte) (Key, error) {
-	puk, err := x509.ParsePKIXPublicKey(publicKey)
+func ParsePKCS1Key(publicKey []byte) (Key, error) {
+	block, _ := pem.Decode(publicKey)
+	if block == nil {
+		return nil, errors.New("publicKey is not pem formate")
+	}
+	pub, err := x509.ParsePKCS1PublicKey(block.Bytes)
 	if err != nil {
 		return nil, err
 	}
-	prk, err := x509.ParsePKCS1PrivateKey(privateKey)
-	if err != nil {
-		return nil, err
-	}
-	return &key{publicKey: puk.(*rsa.PublicKey), privateKey: prk}, nil
+	return &key{publicKey: pub}, nil
 }
 
-func LoadKeyFromPEMFile(publicKeyFilePath, privateKeyFilePath string, ParseKey func([]byte, []byte) (Key, error)) (Key, error) {
-
+func LoadKeyFromPEMFile(publicKeyFilePath string, ParseKey func([]byte) (Key, error)) (Key, error) {
 	//TODO 断言如果入参为"" ，则直接报错
-
 	publicKeyFilePath = strings.TrimSpace(publicKeyFilePath)
-
 	pukBytes, err := ioutil.ReadFile(publicKeyFilePath)
 	if err != nil {
 		return nil, err
 	}
-
 	puk, _ := pem.Decode(pukBytes)
 	if puk == nil {
 		return nil, errors.New("publicKey is not pem formate")
 	}
-
-	privateKeyFilePath = strings.TrimSpace(privateKeyFilePath)
-
-	prkBytes, err := ioutil.ReadFile(privateKeyFilePath)
-	if err != nil {
-		return nil, err
-	}
-
-	prk, _ := pem.Decode(prkBytes)
-	if prk == nil {
-		return nil, errors.New("privateKey is not pem formate")
-	}
-
-	return ParseKey(puk.Bytes, prk.Bytes)
+	return ParseKey(puk.Bytes)
 }
 
 type key struct {
-	publicKey  *rsa.PublicKey
-	privateKey *rsa.PrivateKey
+	publicKey *rsa.PublicKey
 }
 
 func (key *key) Modulus() int {
@@ -82,8 +62,4 @@ func (key *key) Modulus() int {
 
 func (key *key) PublicKey() *rsa.PublicKey {
 	return key.publicKey
-}
-
-func (key *key) PrivateKey() *rsa.PrivateKey {
-	return key.privateKey
 }
